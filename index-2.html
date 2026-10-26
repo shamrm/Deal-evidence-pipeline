@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="How a proof-of-concept pipeline turns scattered real estate deal documents into traceable, checked data.">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font: 14px system-ui, sans-serif; }
+img { max-width: 100%; } [hidden] { display: none !important; }
+</style>
+<title>Deal Evidence Pipeline</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Spectral:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column; three interactive bands (pipeline -> two stores -> trace a number), then outcomes. */
+:root {
+  --bg: #f4f6f7;
+  --surface: #ffffff;
+  --ink: #18222d;
+  --muted: #5b6875;
+  --line: #d7dde2;
+  --accent: #0e6b68;
+  --accent-soft: #dceeed;
+  --code: #2f5d8c;   --code-soft: #e1eaf4;
+  --ai: #6d4aa8;     --ai-soft: #ece6f6;
+  --person: #a86412; --person-soft: #f7ead8;
+  --ok: #2e7d4f; --warn: #b7791f; --bad: #b83a3a;
+  --hl: #fff1a8; --hl-ink: #18222d;
+  --shadow: 0 1px 2px rgba(24,34,45,.06), 0 4px 14px rgba(24,34,45,.05);
+  --display: "Spectral", Georgia, "Times New Roman", serif;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11171d; --surface: #18212a; --ink: #e6ecf1; --muted: #9aa8b5; --line: #2c3946;
+    --accent: #4fb7b2; --accent-soft: #173533;
+    --code: #7fa9d6; --code-soft: #1b2b3c; --ai: #b49be0; --ai-soft: #2a2140; --person: #e0a259; --person-soft: #3a2a17;
+    --ok: #5cbf86; --warn: #e0b04f; --bad: #e57878; --hl: #6b5a12; --hl-ink: #fff6cc;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11171d; --surface: #18212a; --ink: #e6ecf1; --muted: #9aa8b5; --line: #2c3946;
+  --accent: #4fb7b2; --accent-soft: #173533;
+  --code: #7fa9d6; --code-soft: #1b2b3c; --ai: #b49be0; --ai-soft: #2a2140; --person: #e0a259; --person-soft: #3a2a17;
+  --ok: #5cbf86; --warn: #e0b04f; --bad: #e57878; --hl: #6b5a12; --hl-ink: #fff6cc;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2 { font-family: var(--display); font-weight: 600; letter-spacing: -.01em; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.1; }
+h2 { font-size: clamp(22px, 3vw, 28px); line-height: 1.2; }
+h3 { font-size: 15px; margin: 0; font-weight: 600; }
+p { margin: 0; }
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 500; }
+.lede { font-size: 17px; color: var(--muted); max-width: 64ch; }
+.mono { font-family: var(--mono); font-size: 13px; }
+section { margin-top: 56px; display: grid; gap: 18px; }
+.section-head { display: grid; gap: 6px; max-width: 70ch; }
+.section-head p { color: var(--muted); }
+header.top { display: grid; gap: 14px; }
+.brief { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 8px; }
+.brief div { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; }
+.brief b { display: block; font-size: 13px; }
+.brief span { color: var(--muted); font-size: 14px; }
+
+/* chips */
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.chip.code { background: var(--code-soft); color: var(--code); }
+.chip.ai { background: var(--ai-soft); color: var(--ai); }
+.chip.person { background: var(--person-soft); color: var(--person); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 13px; color: var(--muted); }
+
+/* pipeline */
+.stages { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.stage { all: unset; cursor: pointer; display: grid; gap: 6px; align-content: start; padding: 12px; border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--line); position: relative; min-width: 0; }
+.stage:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stage .num { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.stage .name { font-weight: 600; font-size: 15px; }
+.stage .who { display: flex; flex-wrap: wrap; gap: 4px; }
+.stage[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+.stage:not(:last-child)::after { content: "→"; position: absolute; right: -9px; top: 14px; color: var(--muted); font-size: 13px; z-index: 1; }
+.detail { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 12px; box-shadow: var(--shadow); }
+.detail-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; }
+.detail-grid > * { min-width: 0; }
+.rw { display: grid; gap: 6px; }
+.rw div { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+.rw .lbl { width: 70px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.tag { font-family: var(--mono); font-size: 12px; padding: 2px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+.example { border-radius: 8px; background: var(--bg); padding: 12px; font-size: 14px; }
+.example b { font-weight: 600; }
+
+/* stores */
+.stores { display: grid; grid-template-columns: 1fr 1.25fr; gap: 16px; align-items: start; }
+.stores > * { min-width: 0; }
+.store { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; }
+.store-head { display: grid; gap: 2px; }
+.store-head small { color: var(--muted); font-size: 13px; }
+.tree { display: grid; gap: 6px; }
+.node { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; transition: border-color .2s, background .2s; display: grid; gap: 4px; }
+.node .path { font-family: var(--mono); font-size: 13px; font-weight: 500; }
+.node .what { font-size: 13px; color: var(--muted); }
+.node .files { font-family: var(--mono); font-size: 12px; color: var(--muted); padding-left: 12px; border-left: 1px dashed var(--line); overflow-wrap: anywhere; }
+.node.lit { border-color: var(--accent); background: var(--accent-soft); }
+.node.lit .what, .node.lit .files { color: var(--ink); }
+.tables { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tables .node.wide { grid-column: 1 / -1; }
+.fk { font-family: var(--mono); font-size: 11.5px; color: var(--accent); }
+.rule { font-size: 13px; padding: 10px 12px; border-radius: 8px; background: var(--bg); }
+.link-band { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--muted);
+  padding: 10px; border: 1px dashed var(--line); border-radius: 10px; }
+.link-band .mono { color: var(--ink); }
+
+/* trace */
+.trace { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; }
+.steps { display: grid; gap: 6px; align-content: start; }
+.step { all: unset; cursor: pointer; display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: center; padding: 10px; border-radius: 8px; border: 1px solid transparent; }
+.step:focus-visible { outline: 2px solid var(--accent); }
+.step .n { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-family: var(--mono); font-size: 12px; border: 1px solid var(--line); background: var(--surface); }
+.step .t { font-size: 14px; }
+.step[aria-pressed="true"] { background: var(--surface); border-color: var(--line); box-shadow: var(--shadow); }
+.step[aria-pressed="true"] .n { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 14px; align-content: start; min-height: 320px; box-shadow: var(--shadow); }
+.panel .where { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.kv { width: 100%; border-collapse: collapse; font-size: 13px; }
+.kv td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.kv td:first-child { font-family: var(--mono); color: var(--muted); width: 34%; white-space: nowrap; }
+.kv tr.key td { background: var(--accent-soft); }
+.kv tr.key td:first-child { color: var(--accent); }
+.scroll { overflow-x: auto; }
+.tile { display: inline-grid; gap: 2px; padding: 14px 18px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .v { font-family: var(--display); font-size: 34px; line-height: 1; }
+.tile .s { font-size: 12px; color: var(--muted); }
+.email { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; background: var(--bg); border-radius: 8px; padding: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+mark { background: var(--hl); color: var(--hl-ink); padding: 1px 2px; border-radius: 3px; }
+.navrow { display: flex; gap: 8px; }
+.btn { all: unset; cursor: pointer; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
+.btn:focus-visible { outline: 2px solid var(--accent); }
+.btn:hover { border-color: var(--accent); }
+.btn[disabled] { opacity: .4; cursor: default; }
+.say { font-size: 14px; border-left: 3px solid var(--accent); padding-left: 12px; color: var(--ink); }
+
+/* time */
+.time { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+svg text { fill: var(--muted); font-family: var(--sans); font-size: 11px; }
+.compare { display: grid; gap: 8px; font-size: 14px; }
+.compare div { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; }
+
+/* outcomes */
+.split { display: grid; gap: 8px; }
+.bar { display: flex; height: 34px; border-radius: 8px; overflow: hidden; font-size: 13px; font-weight: 600; }
+.bar span { display: flex; align-items: center; padding: 0 10px; white-space: nowrap; overflow: hidden; }
+.bar .a { background: var(--code); color: var(--surface); }
+.bar .b { background: var(--person-soft); color: var(--person); }
+.bar .c { background: var(--ai-soft); color: var(--ai); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 2px; }
+.stat .v { font-family: var(--display); font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat .k { font-size: 13px; color: var(--muted); }
+.flaglist { display: grid; gap: 6px; font-size: 14px; }
+.flaglist div { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: baseline; }
+.sev { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.sev.high { color: var(--bad); } .sev.medium { color: var(--warn); } .sev.low { color: var(--muted); }
+
+/* screen + aws */
+.screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.screens .card h3 { font-size: 14px; }
+.screens .card p { font-size: 13.5px; color: var(--muted); }
+.screens .card .src { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+table.map { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+table.map th, table.map td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.map th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 500; background: var(--bg); }
+table.map td:first-child { font-weight: 600; }
+footer { margin-top: 56px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+
+@media (max-width: 860px) {
+  .stages { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stage:nth-child(3)::after { display: none; }
+  .detail-grid, .stores, .trace, .time { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .steps { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+}
+@media (max-width: 480px) {
+  .stages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stage::after { display: none; }
+  .tables { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Proof of concept · Private real estate · Cedar Point Tower, Business Bay</div>
+    <h1>From scattered deal documents to numbers you can trust</h1>
+    <p class="lede">Every document is filed once, unchanged, in a central store. Every number taken from it points back to its exact source and date. Code checks the AI's work, the machine approves only what it can prove, and a person decides the rest.</p>
+    <div class="brief">
+      <div><b>The problem</b><span>Deal facts are spread across memos, decks, spreadsheets, emails and calls.</span></div>
+      <div><b>The goal</b><span>Capture it into one place, structure it, and flag missing, inconsistent or outdated data.</span></div>
+      <div><b>The hard part</b><span>How to automate with AI without ending up with numbers nobody can trust.</span></div>
+    </div>
+  </header>
+
+  <!-- PIPELINE -->
+  <section id="pipeline" aria-labelledby="h-pipeline">
+    <div class="section-head">
+      <div class="eyebrow">How it works</div>
+      <h2 id="h-pipeline">Six steps, each done by the right worker</h2>
+      <p>Click a step to see what it does and which parts of the two stores it reads and writes.</p>
+    </div>
+    <div class="legend">
+      <span class="chip code">Code</span> exact and repeatable
+      <span class="chip ai">AI</span> reading and interpreting
+      <span class="chip person">Person</span> judgement and sign-off
+    </div>
+    <div class="stages" role="group" aria-label="Pipeline steps" id="stages"></div>
+    <div class="detail" id="detail" aria-live="polite"></div>
+  </section>
+
+  <!-- STORES -->
+  <section id="stores" aria-labelledby="h-stores">
+    <div class="section-head">
+      <div class="eyebrow">The data structure</div>
+      <h2 id="h-stores">Two stores, one link between them</h2>
+      <p>Files live in an object store (S3 on AWS; SeaweedFS locally, same code). Facts live in a database. The highlighted parts are what the selected step uses.</p>
+    </div>
+    <div class="stores">
+      <div class="store">
+        <div class="store-head"><h3>Evidence store · bucket <span class="mono">deal-lake</span></h3><small>The archive room: files, never edited</small></div>
+        <div class="tree">
+          <div class="node" data-k="inbox">
+            <span class="path">Incoming sources</span>
+            <span class="what">Adviser emails, data room, uploads, Teams calls. Read once at capture, never again.</span>
+          </div>
+          <div class="node" data-k="raw">
+            <span class="path">raw/{document_id}/</span>
+            <span class="what">The original, exactly as received, plus its stamp.</span>
+            <span class="files">2026-10-15_occupancy_update.eml<br>meta.json  (sender, received, SHA-256, channel)</span>
+          </div>
+          <div class="node" data-k="parsed">
+            <span class="path">parsed/{document_id}.json</span>
+            <span class="what">The text read from it, labelled by page, slide, sheet or speaker.</span>
+          </div>
+          <div class="node" data-k="extracted">
+            <span class="path">extracted/{document_id}.json</span>
+            <span class="what">The AI's answer exactly as returned, kept for audit.</span>
+          </div>
+        </div>
+        <p class="rule"><b>Rule:</b> <span class="mono">raw/</span> is evidence. The other two folders are working copies that can always be rebuilt from it.</p>
+      </div>
+
+      <div class="store">
+        <div class="store-head"><h3>Facts store · Postgres</h3><small>The index cards and the logbook</small></div>
+        <div class="tables">
+          <div class="node" data-k="deals"><span class="path">deals</span><span class="what">Which investments we track</span></div>
+          <div class="node" data-k="field_catalog"><span class="path">field_catalog</span><span class="what">Agreed data points: occupancy, NOI, risks… with unit and valid range</span></div>
+          <div class="node wide" data-k="documents"><span class="path">documents</span><span class="what">Every file received: who sent it, when, its fingerprint, type and deal</span><span class="fk">deal_id → deals · s3_key → raw/ file · parent → its email</span></div>
+          <div class="node wide" data-k="facts"><span class="path">facts</span><span class="what">One value each: as-of date, exact quote and location, method (code/AI/person), confidence, status</span><span class="fk">document_id → documents · field_key → field_catalog</span></div>
+          <div class="node" data-k="flags"><span class="path">flags</span><span class="what">Missing, inconsistent, outdated</span><span class="fk">fact_ids → facts</span></div>
+          <div class="node" data-k="audit_log"><span class="path">audit_log</span><span class="what">Every decision: who, what, why</span></div>
+        </div>
+        <p class="rule"><b>Rule:</b> facts are never overwritten. A correction adds a new fact and marks the old one superseded.</p>
+      </div>
+    </div>
+    <div class="link-band">
+      <span>fact</span><span class="mono">document_id</span><span>→ document</span><span class="mono">s3_key</span><span>→ original file in the store</span>
+    </div>
+  </section>
+
+  <!-- TRACE -->
+  <section id="trace" aria-labelledby="h-trace">
+    <div class="section-head">
+      <div class="eyebrow">Proof of traceability</div>
+      <h2 id="h-trace">Follow one number back to its source</h2>
+      <p>The review screen says occupancy is 85%. Here is how anyone can check where that came from, in four hops.</p>
+    </div>
+    <div class="trace">
+      <div class="steps" id="steps" role="group" aria-label="Trace steps"></div>
+      <div class="panel" id="panel" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- TIME -->
+  <section id="time" aria-labelledby="h-time">
+    <div class="section-head">
+      <div class="eyebrow">Why dates matter</div>
+      <h2 id="h-time">Different numbers are not always a conflict</h2>
+      <p>Each fact records the date it was true. Three occupancy figures from four documents turn out to be a decline over time, which is useful information in itself.</p>
+    </div>
+    <div class="time">
+      <div class="card">
+        <h3>Occupancy, as reported</h3>
+        <div class="scroll">
+          <svg viewBox="0 0 460 210" width="100%" role="img" aria-label="Occupancy falls from 92 percent on 30 June to 88 percent on 30 September to 85 percent on 15 October 2026">
+            <g stroke="var(--line)" stroke-width="1">
+              <line x1="50" y1="30" x2="440" y2="30"/><line x1="50" y1="80" x2="440" y2="80"/><line x1="50" y1="130" x2="440" y2="130"/><line x1="50" y1="180" x2="440" y2="180"/>
+            </g>
+            <text x="40" y="34" text-anchor="end">94%</text><text x="40" y="84" text-anchor="end">90%</text><text x="40" y="134" text-anchor="end">86%</text><text x="40" y="184" text-anchor="end">82%</text>
+            <path d="M70 55 L330 105 L410 142.5 L410 180 L70 180 Z" fill="var(--accent)" opacity=".12"/>
+            <polyline points="70,55 330,105 410,142.5" fill="none" stroke="var(--accent)" stroke-width="2.5"/>
+            <circle cx="70" cy="55" r="5" fill="var(--accent)"/><circle cx="330" cy="105" r="5" fill="var(--accent)"/><circle cx="410" cy="142.5" r="6.5" fill="var(--accent)"/>
+            <text x="70" y="44" text-anchor="middle" style="fill:var(--ink);font-weight:600">92%</text>
+            <text x="330" y="94" text-anchor="middle" style="fill:var(--ink);font-weight:600">88%</text>
+            <text x="410" y="131" text-anchor="middle" style="fill:var(--ink);font-weight:600">85%</text>
+            <text x="70" y="200" text-anchor="middle">30 Jun</text><text x="330" y="200" text-anchor="middle">30 Sep</text><text x="410" y="200" text-anchor="middle">15 Oct</text>
+          </svg>
+        </div>
+      </div>
+      <div class="card">
+        <h3>How the rules read it</h3>
+        <div class="compare">
+          <div><span class="dot" style="background:var(--muted)"></span><span><b>92%</b> · information memo and investor deck, as of 30 June</span></div>
+          <div><span class="dot" style="background:var(--muted)"></span><span><b>88%</b> · rent roll (calculated by code), broker email and Teams call, as of 30 September</span></div>
+          <div><span class="dot" style="background:var(--accent)"></span><span><b>85%</b> · broker email: a tenant moved out early, 15 October</span></div>
+        </div>
+        <p class="say">Same date, different values: <b>conflict</b>, flagged.<br>Different dates: <b>a trend</b>. The newest value is current, and a steady decline is flagged for attention.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- OUTCOMES -->
+  <section id="results" aria-labelledby="h-results">
+    <div class="section-head">
+      <div class="eyebrow">Automation and quality</div>
+      <h2 id="h-results">The machine approves what it can prove</h2>
+      <p>A fact is approved automatically only when confidence is at least 0.90 and no problem involves it. Risks and assumptions are always confirmed by a person, because code cannot check them.</p>
+    </div>
+    <div class="split card">
+      <h3>56 facts from 10 documents</h3>
+      <div class="bar" role="img" aria-label="27 approved automatically, 14 numbers for review, 15 risks and assumptions for review">
+        <span class="a" style="flex:27">27 approved automatically</span>
+        <span class="b" style="flex:14">14 numbers</span>
+        <span class="c" style="flex:15">15 risks</span>
+      </div>
+      <div class="legend"><span class="chip code">Code-approved</span><span class="chip person">Person reviews numbers</span><span class="chip ai">Person confirms AI-found risks</span></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="v">35/35</span><span class="k">expected facts found</span></div>
+      <div class="stat"><span class="v">100%</span><span class="k">values correct</span></div>
+      <div class="stat"><span class="v">86–89%</span><span class="k">as-of dates exact (across runs)</span></div>
+      <div class="stat"><span class="v">10/10</span><span class="k">planted problems caught</span></div>
+    </div>
+    <div class="card">
+      <h3>What the checks raised on Cedar Point Tower</h3>
+      <div class="flaglist">
+        <div><span class="sev high">High</span><span>Memo NOI doesn't add up: 15,650,000 − 5,740,000 = 9,910,000, but it states 9,190,000</span></div>
+        <div><span class="sev high">High</span><span>Memo and deck disagree on NOI for the same date</span></div>
+        <div><span class="sev high">High</span><span>RICS valuation from March 2025 is over 12 months old</span></div>
+        <div><span class="sev medium">Medium</span><span>Memo yield doesn't match its own NOI ÷ price</span></div>
+        <div><span class="sev medium">Medium</span><span>Lease term claimed 3.4 years in June, 1.54 calculated from the September rent roll</span></div>
+        <div><span class="sev medium">Medium</span><span>Loan maturity date missing from every document</span></div>
+        <div><span class="sev low">Low</span><span>Occupancy declining: 92% → 88% → 85%</span></div>
+      </div>
+      <p class="say">Correcting the one NOI typo clears three of these flags automatically, and the correction is logged with the reviewer's name and reason.</p>
+    </div>
+  </section>
+
+  <!-- SCREEN -->
+  <section id="screen" aria-labelledby="h-screen">
+    <div class="section-head">
+      <div class="eyebrow">The review screen</div>
+      <h2 id="h-screen">A window onto the two stores</h2>
+      <p>The screen does no processing. It reads facts and files, and writes the reviewer's decisions back.</p>
+    </div>
+    <div class="screens">
+      <div class="card"><h3>Deal overview</h3><p>Current value of each data point, issues needing attention, risks and assumptions.</p><span class="src">reads facts, flags</span></div>
+      <div class="card"><h3>Document view</h3><p>The document page by page with quotes highlighted, and everything taken from it.</p><span class="src">reads parsed/, raw/, facts</span></div>
+      <div class="card"><h3>Review queue</h3><p>Approve, correct or reject each proposed fact, with its evidence one click away.</p><span class="src">writes facts, audit_log</span></div>
+      <div class="card"><h3>Flags</h3><p>Fix the data, or resolve a judgement call with a written note.</p><span class="src">writes flags, audit_log</span></div>
+      <div class="card"><h3>Audit log</h3><p>Every approval, correction and resolution, by name and with a reason.</p><span class="src">reads audit_log</span></div>
+    </div>
+  </section>
+
+  <!-- AWS -->
+  <section id="aws" aria-labelledby="h-aws">
+    <div class="section-head">
+      <div class="eyebrow">Path to production</div>
+      <h2 id="h-aws">Same design on AWS; mostly configuration</h2>
+      <p>Storage, database and AI calls each sit in one small file, so moving them changes settings rather than logic.</p>
+    </div>
+    <div class="scroll">
+      <table class="map">
+        <thead><tr><th>Part</th><th>This demo</th><th>Production</th></tr></thead>
+        <tbody>
+          <tr><td>Evidence store</td><td>SeaweedFS (S3-compatible)</td><td>Amazon S3 with versioning, encryption, no public access</td></tr>
+          <tr><td>Facts store</td><td>Postgres in Docker</td><td>Amazon RDS for PostgreSQL</td></tr>
+          <tr><td>AI</td><td>Claude via the Anthropic API</td><td>Claude via Amazon Bedrock, inside their AWS account</td></tr>
+          <tr><td>Capture</td><td>Scripts read a sample inbox</td><td>Microsoft Graph copies a deals mailbox, Teams transcripts and SharePoint into S3</td></tr>
+          <tr><td>Running the steps</td><td>Run by hand, in order</td><td>A new file in S3 triggers the pipeline through a queue with retries</td></tr>
+          <tr><td>Review screen</td><td>Streamlit on a laptop</td><td>Behind company sign-in, with access per deal</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>All data shown is synthetic: a fictional property, companies and people created for this proof of concept. Figures are from one pipeline run and can differ slightly between runs.</footer>
+</div>
+
+<script>
+const STAGES = [
+  { name: "Capture", who: ["code"],
+    does: "Copies every incoming file into the store before anything else happens, gives it an ID and a fingerprint, and splits email attachments into their own documents.",
+    reads: ["inbox"], writes: ["raw", "documents"],
+    ex: "10 documents stored. The rent roll arrived twice, by email and by upload, and was stored <b>once</b>: same fingerprint, same file." },
+  { name: "Parse", who: ["code"],
+    does: "Reads each original from the store and turns it into text, keeping where each piece came from: page, slide, sheet or speaker.",
+    reads: ["raw"], writes: ["parsed", "documents"],
+    ex: "Information memo page 4 becomes text labelled <span class='mono'>[page 4]</span>, so any number found there can say exactly where it was." },
+  { name: "Classify", who: ["ai", "code"],
+    does: "AI names the document type and the property it's about. A plain rule, not the AI, links it to a known deal; unknown properties wait for a person.",
+    reads: ["parsed", "deals"], writes: ["documents"],
+    ex: "“Gulfstone indicative terms” → <b>term sheet</b> → linked to <b>Cedar Point Tower</b>." },
+  { name: "Extract", who: ["ai", "code"],
+    does: "AI reads written documents and fills in the agreed data points, each with its exact quote. Code then checks that the quote really exists. Spreadsheets are calculated by code, without AI.",
+    reads: ["parsed", "field_catalog"], writes: ["facts", "extracted"],
+    ex: "“profit rate currently 6.35%” → <b>interest rate = 6.35%</b>, quote verified. Rent roll → <b>occupancy 88.0%</b>, calculated by code from the lease rows." },
+  { name: "Validate", who: ["code"],
+    does: "Plain rules compare the facts: do the sums add up, do sources disagree for the same date, is anything too old or missing? Then it picks the current value of each item and approves what it can vouch for.",
+    reads: ["facts"], writes: ["flags", "facts", "audit_log"],
+    ex: "15,650,000 − 5,740,000 = 9,910,000, but the memo says <b>9,190,000</b> → arithmetic flag." },
+  { name: "Review", who: ["person"],
+    does: "A person approves, corrects or rejects what the machine couldn't vouch for, and resolves judgement calls with a note. Every decision is logged.",
+    reads: ["facts", "flags", "raw", "parsed"], writes: ["facts", "flags", "audit_log"],
+    ex: "Reviewer corrects memo NOI to <b>9,910,000</b>: old fact superseded, new one added, three flags clear on the next check." },
+];
+const LABEL = { code: "Code", ai: "AI", person: "Person" };
+const NAMES = { inbox: "incoming sources", raw: "raw/", parsed: "parsed/", extracted: "extracted/", deals: "deals", documents: "documents", field_catalog: "field_catalog", facts: "facts", flags: "flags", audit_log: "audit_log" };
+
+const stagesEl = document.getElementById("stages");
+const detailEl = document.getElementById("detail");
+STAGES.forEach((s, i) => {
+  const b = document.createElement("button");
+  b.className = "stage"; b.id = "stage-" + i; b.setAttribute("aria-pressed", "false");
+  b.innerHTML = `<span class="num">${String(i + 1).padStart(2, "0")}</span><span class="name">${s.name}</span>
+    <span class="who">${s.who.map(w => `<span class="chip ${w}">${LABEL[w]}</span>`).join("")}</span>`;
+  b.addEventListener("click", () => selectStage(i));
+  stagesEl.appendChild(b);
+});
+function tags(keys) { return keys.map(k => `<span class="tag">${NAMES[k]}</span>`).join(""); }
+function selectStage(i) {
+  const s = STAGES[i];
+  document.querySelectorAll(".stage").forEach((b, j) => b.setAttribute("aria-pressed", j === i ? "true" : "false"));
+  detailEl.innerHTML = `<div class="detail-grid">
+      <div style="display:grid;gap:10px"><h3>${i + 1}. ${s.name} ${s.who.map(w => `<span class="chip ${w}">${LABEL[w]}</span>`).join(" ")}</h3><p>${s.does}</p></div>
+      <div class="rw"><div><span class="lbl">Reads</span>${tags(s.reads)}</div><div><span class="lbl">Writes</span>${tags(s.writes)}</div></div>
+    </div>
+    <div class="example"><b>In Cedar Point Tower:</b> ${s.ex}</div>`;
+  const lit = new Set([...s.reads, ...s.writes]);
+  document.querySelectorAll(".node[data-k]").forEach(n => n.classList.toggle("lit", lit.has(n.dataset.k)));
+}
+selectStage(3);
+
+const QUOTE = "Occupancy is now 85.0% (102,000 sq ft leased)";
+const TRACE = [
+  { t: "What the screen shows", where: "Review screen",
+    body: `<div class="tile"><span class="k">Occupancy</span><span class="v">85%</span><span class="s">as of 15 Oct 2026 · approved</span></div>
+      <p class="say">Hovering the tile shows its source. Behind it sits one row in the <span class="mono">facts</span> table.</p>` },
+  { t: "The fact row", where: "Postgres · facts",
+    body: `<div class="scroll"><table class="kv">
+      <tr><td>field_key</td><td>occupancy_pct</td></tr>
+      <tr><td>value_num</td><td>85</td></tr>
+      <tr><td>as_of_date</td><td>2026-10-15</td></tr>
+      <tr class="key"><td>document_id</td><td>508f0d72-…</td></tr>
+      <tr><td>location</td><td>email</td></tr>
+      <tr><td>source_quote</td><td>“${QUOTE}”</td></tr>
+      <tr><td>method · confidence</td><td>AI · 0.95, quote verified by code</td></tr>
+      <tr><td>status</td><td>approved</td></tr></table></div>
+      <p class="say">The value, when it was true, the exact words, and the ID of the document it came from.</p>` },
+  { t: "The document row", where: "Postgres · documents",
+    body: `<div class="scroll"><table class="kv">
+      <tr><td>document_id</td><td>508f0d72-…</td></tr>
+      <tr><td>filename</td><td>2026-10-15_occupancy_update.eml</td></tr>
+      <tr><td>doc_type · deal</td><td>email · Cedar Point Tower</td></tr>
+      <tr><td>sender</td><td>Omar Haddad, Harlow &amp; Qadri</td></tr>
+      <tr><td>received_at</td><td>15 Oct 2026, 14:07 Gulf time</td></tr>
+      <tr><td>sha256</td><td>fingerprint of the exact bytes</td></tr>
+      <tr class="key"><td>s3_key</td><td>raw/508f0d72-…/2026-10-15_occupancy_update.eml</td></tr></table></div>
+      <p class="say">Who sent it, when, and the exact address of the original in the store.</p>` },
+  { t: "The original in the store", where: "Evidence store · raw/",
+    body: `<div class="email">From: Omar Haddad &lt;omar.haddad@harlowqadri.example&gt;
+Date: Thu, 15 Oct 2026 14:07:00 +0400
+Subject: Cedar Point Tower - Brightline Dental Clinic early move-out
+
+Dear Priya,
+
+For your information: Brightline Dental Clinic (unit 150, 3,600 sq ft) moved out on 14 October, ahead of their 31 October lease expiry. <mark>${QUOTE}</mark>.</div>
+      <p class="say">The untouched email, fetched from the store rather than the inbox, with the quoted words highlighted. Any number on the screen can be checked this way in seconds.</p>` },
+];
+const stepsEl = document.getElementById("steps");
+const panelEl = document.getElementById("panel");
+TRACE.forEach((s, i) => {
+  const b = document.createElement("button");
+  b.className = "step"; b.setAttribute("aria-pressed", "false");
+  b.innerHTML = `<span class="n">${i + 1}</span><span class="t">${s.t}</span>`;
+  b.addEventListener("click", () => showTrace(i));
+  stepsEl.appendChild(b);
+});
+let traceAt = 0;
+function showTrace(i) {
+  traceAt = i;
+  const s = TRACE[i];
+  stepsEl.querySelectorAll(".step").forEach((b, j) => b.setAttribute("aria-pressed", j === i ? "true" : "false"));
+  panelEl.innerHTML = `<div class="where"><span class="eyebrow">Hop ${i + 1} of ${TRACE.length}</span><span class="tag">${s.where}</span></div>${s.body}
+    <div class="navrow"><button class="btn" id="prev" ${i === 0 ? "disabled" : ""}>Back</button><button class="btn" id="next" ${i === TRACE.length - 1 ? "disabled" : ""}>Next hop</button></div>`;
+  panelEl.querySelector("#prev").addEventListener("click", () => i > 0 && showTrace(i - 1));
+  panelEl.querySelector("#next").addEventListener("click", () => i < TRACE.length - 1 && showTrace(i + 1));
+}
+showTrace(0);
+</script>
+</body>
+</html>
